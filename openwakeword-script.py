@@ -1,101 +1,48 @@
-
+﻿import queue
 import time
-import queue
-import numpy as np
-import sounddevice as sd
 
-from scipy.signal import resample_poly
 from openwakeword.model import Model
 
-# ---------------- CONFIGURATION ----------------
+from audio.audio_processor import to_mono, wake_word_audio
+from audio.device_manager import microphone_from_cli
 
-DEVICE = 11
-SAMPLE_RATE = 48000
-CHANNELS = 1
 
-CHUNK_SIZE = 3840       # 80 ms at 48 kHz
 WAKE_THRESHOLD = 0.3
 COOLDOWN_SECONDS = 2.0
 
-# ------------------------------------------------
 
-audio_queue = queue.Queue(maxsize=100)
+def main():
+    microphone = microphone_from_cli("Test Hey Jarvis wake-word detection.")
+    if microphone is None:
+        return
 
-print("Loading openWakeWord model...")
+    print("Loading openWakeWord model...")
+    model = Model(wakeword_models=["hey_jarvis"], inference_framework="onnx")
+    audio_queue = queue.Queue(maxsize=100)
 
-model = Model(
-    wakeword_models=["hey_jarvis"],
-    inference_framework="onnx"
-)
+    def audio_callback(indata, frames, time_info, status):
+        if status:
+            print("Audio status:", status)
+        try:
+            audio_queue.put_nowait(indata.copy())
+        except queue.Full:
+            pass
 
-print("Model loaded successfully.")
-
-def audio_callback(indata, frames, time_info, status):
-    if status:
-        print("Audio status:", status)
-
+    print("Say Hey Jarvis to test wake-word detection. Press Ctrl+C to stop.")
+    last_detection = 0
     try:
-        audio_queue.put_nowait(indata.copy())
-    except queue.Full:
-        pass
-
-print("\nStarting microphone...")
-print("Say hey_jarvis to test wake-word detection.")
-print("Press Ctrl+C to stop.\n")
-
-last_detection = 0
-max_score = 0
-
-try:
-    with sd.InputStream(
-        device=DEVICE,
-        samplerate=SAMPLE_RATE,
-        channels=CHANNELS,
-        dtype="int16",
-        blocksize=CHUNK_SIZE,
-        callback=audio_callback
-    ):
-
-        while True:
-            # Get next audio block
-            audio = audio_queue.get()
-
-            # Convert 48 kHz to 16 kHz
-            audio_16k = resample_poly(
-                audio.reshape(-1),
-                1,
-                3
-            )
-
-            audio_16k = np.clip(
-                audio_16k,
-                -32768,
-                32767
-            ).astype(np.int16)
-
-            # Run wake-word detection
-            predictions = model.predict(audio_16k)
-
-            score = float(predictions.get("hey_jarvis", 0.0))
-            max_score = max(max_score, score)
-
-            now = time.monotonic()
-
-            if score >= WAKE_THRESHOLD:
-                if now - last_detection >= COOLDOWN_SECONDS:
-                    print(
-                        f"\n[WAKE DETECTED] hey_jarvis | "
-                        f"Score: {score:.4f}"
-                    )
-
+        with microphone.open(audio_callback):
+            while True:
+                audio = to_mono(audio_queue.get())
+                predictions = model.predict(wake_word_audio(audio, microphone.sample_rate))
+                score = float(predictions.get("hey_jarvis", 0.0))
+                now = time.monotonic()
+                if score >= WAKE_THRESHOLD and now - last_detection >= COOLDOWN_SECONDS:
+                    print(f"[WAKE DETECTED] hey_jarvis | Score: {score:.4f}")
                     last_detection = now
+    except KeyboardInterrupt:
+        print("Listener stopped.")
 
-            # Periodically display detection status
-            if int(now) % 5 == 0:
-                pass
 
-except KeyboardInterrupt:
-    print("\nStopping Sentry listener...")
-
-finally:
-    print("Listener stopped.")
+if __name__ == "__main__":
+    main()

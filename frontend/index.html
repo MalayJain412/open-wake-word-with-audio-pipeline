@@ -1,0 +1,312 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Sentry · Audio test console</title>
+  <style>
+    :root { --green: #173d32; --ink: #203b33; --cream: #f7f6f0; --line: #dbdfd6; --orange: #f2a45e; --purple: #654777; --muted: #54645d; }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--cream); color: var(--ink); font: 15px/1.55 'Segoe UI', sans-serif; }
+    header { background: var(--green); color: white; }
+    nav, main { width: min(1056px, calc(100% - 48px)); margin: auto; }
+    nav { min-height: 65px; display: flex; align-items: center; justify-content: space-between; }
+    .brand { font: bold 24px Georgia, serif; display: flex; align-items: center; gap: 11px; }
+    .brand-mark { border: 1px solid var(--orange); color: var(--orange); border-radius: 50%; font: normal 15px Georgia, serif; width: 30px; height: 30px; display: grid; place-items: center; }
+    .local { font-size: 13px; color: #dae7de; }
+    main { padding: 54px 0 36px; }
+    h1, h2 { font-family: Georgia, serif; font-weight: normal; margin: 0; }
+    h1 { font-size: clamp(38px, 6vw, 62px); letter-spacing: -.045em; line-height: 1.06; }
+    h2 { font-size: 27px; letter-spacing: -.025em; }
+    p { margin: 0; color: var(--muted); }
+    .intro { margin-top: 13px; }
+    .layout { display: grid; grid-template-columns: 1fr 1.3fr; gap: 18px; margin-top: 32px; align-items: stretch; }
+    .card { background: white; border: 1px solid var(--line); border-radius: 12px; padding: 25px; min-width: 0; }
+    .card-title, .label-row, .event-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+    .status { background: #f1ebf5; color: var(--purple); white-space: nowrap; padding: 4px 10px; border-radius: 20px; font-size: 12px; font-weight: 650; }
+    .status.live { background: #dceee2; color: #235b41; }
+    .status.error { background: #ffebd9; color: #6d3d14; }
+    .label-row { margin-top: 24px; margin-bottom: 6px; }
+    button { font: inherit; }
+    .device-picker { position: relative; }
+    .device-picker summary { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 12px; min-height: 43px; border: 1px solid #b8c4bb; border-radius: 6px; cursor: pointer; list-style: none; }
+    .device-picker summary::-webkit-details-marker { display: none; }
+    .device-picker summary::after { content: ''; flex: none; width: 7px; height: 7px; border: solid var(--green); border-width: 0 2px 2px 0; transform: translateY(-2px) rotate(45deg); }
+    .device-picker[open] summary::after { transform: translateY(2px) rotate(225deg); }
+    .device-picker summary[aria-disabled="true"] { opacity: .6; cursor: default; }
+    #device-choice { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .device-list { position: absolute; z-index: 2; inset: calc(100% + 5px) 0 auto; margin: 0; background: white; border: 1px solid #b8c4bb; border-radius: 6px; max-height: min(238px, 45vh); overflow-y: auto; overscroll-behavior: contain; scrollbar-gutter: stable; box-shadow: 0 6px 16px #173d3226; }
+    .device-option { display: flex; align-items: center; gap: 10px; min-height: 52px; padding: 8px 10px; cursor: pointer; }
+    .device-option + .device-option { border-top: 1px solid var(--line); }
+    .device-option:hover { background: #f6f8f4; }
+    .device-option:has(input:checked) { background: #f1ebf5; }
+    .device-option:focus-within { outline: 2px solid var(--purple); outline-offset: -2px; }
+    .device-option input { flex: none; margin: 0; accent-color: var(--purple); }
+    .device-option span { min-width: 0; overflow-wrap: anywhere; line-height: 1.35; }
+    .device-option small { display: block; margin-top: 3px; color: var(--muted); font-weight: normal; }
+    .device-list[aria-disabled="true"] .device-option { cursor: default; }
+    button { cursor: pointer; border: 1px solid transparent; border-radius: 6px; font-weight: 650; padding: 9px 15px; color: var(--green); background: white; }
+    button:disabled { opacity: .5; cursor: default; }
+    :focus-visible { outline: 2px solid var(--purple); outline-offset: 3px; }
+    .primary { background: var(--orange); color: #312314; }
+    .secondary { border-color: #bac7be; }
+    .text-button { color: var(--purple); font-size: 13px; padding: 2px 0; }
+    .actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+    .tip { border-top: 1px solid var(--line); margin-top: 20px; padding-top: 14px; font-size: 13px; }
+    .tip strong { color: var(--purple); }
+    .transcript { white-space: pre-wrap; overflow-wrap: anywhere; background: #f8f5fa; border-left: 3px solid #a58ab4; padding: 17px; margin-top: 20px; border-radius: 0 6px 6px 0; min-height: 116px; max-height: 330px; overflow: auto; }
+    .transcript.empty { color: var(--muted); }
+    .events { margin-top: 18px; }
+    .log { margin: 15px 0 0; padding: 14px 16px; background: #f6f8f4; border-radius: 6px; min-height: 67px; max-height: 240px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; font: 12px/1.7 Consolas, monospace; }
+    .event-row span { color: var(--muted); font-size: 13px; }
+    #error { margin-top: 12px; color: #773b17; font-size: 13px; }
+    #error:empty { display: none; }
+    @media (max-width: 700px) { nav, main { width: calc(100% - 32px); } main { padding-top: 34px; } .layout { grid-template-columns: 1fr; margin-top: 24px; } .card { padding: 20px; } }
+  </style>
+</head>
+<body>
+  <header>
+    <nav aria-label="Sentry"><div class="brand"><span class="brand-mark" aria-hidden="true">S</span>Sentry</div><span class="local">Local audio testing</span></nav>
+  </header>
+  <main>
+    <h1>Audio test console</h1>
+    <p class="intro">Check your microphone, trigger the wake word, and review the transcript.</p>
+    <div class="layout">
+      <section class="card" aria-labelledby="input-title">
+        <div class="card-title"><h2 id="input-title">Microphone</h2><span id="status" class="status" role="status">Idle</span></div>
+        <div class="label-row"><strong id="device-label">Input device</strong><button id="refresh" class="text-button" type="button">Refresh inputs</button></div>
+        <details id="device-picker" class="device-picker">
+          <summary id="device-trigger" aria-labelledby="device-label device-choice"><span id="device-choice">Windows default microphone</span></summary>
+          <div id="devices" class="device-list" role="radiogroup" aria-labelledby="device-label"></div>
+        </details>
+        <div class="actions"><button id="start" class="primary" type="button" disabled>Start listening</button><button id="stop" class="secondary" type="button" disabled>Stop</button></div>
+        <p id="error" role="alert"></p>
+        <p class="tip">Wake word <strong id="wake-word">—</strong>. Wait for “Recording,” then speak.</p>
+      </section>
+      <section class="card" aria-labelledby="transcript-title">
+        <h2 id="transcript-title">Transcript</h2>
+        <p id="model">Local Ollama transcription</p>
+        <div id="transcript" class="transcript empty" aria-live="polite">Your latest transcript will appear here.</div>
+      </section>
+    </div>
+    <section class="card events" aria-labelledby="activity-title">
+      <div class="event-row"><h2 id="activity-title">Activity</h2><span>Listener output</span></div>
+      <pre id="log" class="log">Waiting for the listener to start.</pre>
+    </section>
+  </main>
+  <script>
+    const element = id => document.getElementById(id);
+    const deviceList = element('devices');
+    const devicePicker = element('device-picker');
+    const deviceTrigger = element('device-trigger');
+    let devices = [];
+    let selectedIndex = 'system';
+    let defaultIndex = null;
+    let ready = false;
+    let running = false;
+    let pending = false;
+    let polling = false;
+    let refreshingInputs = false;
+    let actionVersion = 0;
+
+    function controls() {
+      element('start').disabled = !ready || !devices.length || running || pending;
+      element('stop').disabled = !running || pending;
+      element('refresh').disabled = running || pending;
+      deviceList.setAttribute('aria-disabled', String(running || pending));
+      deviceTrigger.setAttribute('aria-disabled', String(running || pending));
+      if (running || pending) devicePicker.open = false;
+      for (const radio of deviceList.querySelectorAll('input')) radio.disabled = running || pending;
+    }
+
+    async function request(path, data) {
+      const response = await fetch(path, data === undefined ? {} : {
+        method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(data),
+      });
+      if (!response.headers.get('Content-Type')?.includes('application/json')) throw new Error('The Sentry console did not respond.');
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || 'The request failed.');
+      return result;
+    }
+
+    function showError(message) {
+      element('error').textContent = message;
+    }
+
+    function deviceOption(index, title, detail) {
+      const row = document.createElement('label');
+      row.className = 'device-option';
+      const input = document.createElement('input');
+      input.type = 'radio';
+      input.name = 'microphone';
+      input.checked = index === selectedIndex;
+      input.addEventListener('change', () => {
+        selectedIndex = index;
+        element('device-choice').textContent = title;
+      });
+      input.addEventListener('click', () => closeDevicePicker(true));
+      const text = document.createElement('span');
+      text.textContent = title;
+      const metadata = document.createElement('small');
+      metadata.textContent = detail;
+      text.append(metadata);
+      row.append(input, text);
+      return row;
+    }
+
+    function renderDevices() {
+      const defaultDevice = devices.find(device => device.index === defaultIndex);
+      const defaultTitle = 'Windows default microphone';
+      const savedTitle = 'Saved Sentry preference';
+      deviceList.replaceChildren(
+        deviceOption('system', defaultTitle, defaultDevice?.name || 'Follows Windows Sound settings.'),
+        deviceOption(null, savedTitle, 'Uses your saved input when available.'),
+      );
+      for (const device of devices) {
+        const detail = `${device.host_api} · ${device.native_rate.toLocaleString()} Hz · ${device.max_channels} channels`;
+        deviceList.append(deviceOption(device.index, device.name, detail));
+      }
+      const selected = devices.find(device => device.index === selectedIndex);
+      element('device-choice').textContent = selected?.name || (selectedIndex === null ? savedTitle : defaultTitle);
+      if (devicePicker.open) scrollToSelectedDevice();
+    }
+
+    function scrollToSelectedDevice() {
+      const row = deviceList.querySelector('input:checked')?.closest('label');
+      if (row) deviceList.scrollTop = row.offsetTop;
+    }
+
+    function closeDevicePicker(restoreFocus) {
+      devicePicker.open = false;
+      if (restoreFocus) deviceTrigger.focus();
+    }
+
+    async function refreshDevices() {
+      if (refreshingInputs || running || pending) return;
+      refreshingInputs = true;
+      try {
+        const result = await request('/api/devices');
+        if (running || pending) return;
+        if (ready && result.default_index === defaultIndex && JSON.stringify(result.devices) === JSON.stringify(devices)) return;
+        const selected = devices.find(device => device.index === selectedIndex);
+        devices = result.devices;
+        defaultIndex = result.default_index;
+        if (selected) {
+          const matches = devices.filter(device => device.name === selected.name && device.host_api === selected.host_api);
+          selectedIndex = matches.length === 1 ? matches[0].index : 'system';
+        }
+        renderDevices();
+        element('wake-word').textContent = result.wake_word.replaceAll('_', ' ');
+        element('model').textContent = result.model;
+        if (!devices.length) {
+          showError('No microphones found. Check that your device appears under Input in Windows Sound settings.');
+        } else if (selected && selectedIndex === 'system') {
+          showError('The selected microphone disconnected. Switched to the Windows default.');
+        } else {
+          showError('');
+        }
+        ready = true;
+      } catch (error) {
+        ready = false;
+        showError(error.message);
+      } finally {
+        refreshingInputs = false;
+        controls();
+      }
+    }
+
+    function render(state) {
+      running = state.running;
+      const status = element('status');
+      let label = running ? 'Starting' : state.exit_code ? 'Error' : 'Idle';
+      let transcript = '';
+      let capturing = false;
+      let captured = [];
+      for (const line of state.lines) {
+        if (line === '========== TRANSCRIPTION ==========') {
+          capturing = true;
+          captured = [];
+        } else if (capturing && line === '===================================') {
+          transcript = captured.join('\n');
+          capturing = false;
+        } else if (capturing) {
+          captured.push(line);
+        } else if (running) {
+          if (line.startsWith('[RECORDING]')) label = 'Recording';
+          if (line.startsWith('[OLLAMA]')) label = 'Transcribing';
+          if (line.startsWith('[READY]') || line.startsWith('Say the wake word')) label = 'Listening';
+        }
+      }
+      status.textContent = label;
+      status.className = 'status' + (running ? ' live' : state.exit_code ? ' error' : '');
+      const text = element('transcript');
+      const displayed = transcript || 'Your latest transcript will appear here.';
+      if (text.textContent !== displayed) text.textContent = displayed;
+      text.classList.toggle('empty', !transcript);
+      const log = element('log');
+      const output = state.lines.join('\n') || 'Waiting for the listener to start.';
+      if (log.textContent !== output) {
+        const follow = log.scrollHeight - log.scrollTop - log.clientHeight < 30;
+        log.textContent = output;
+        if (follow) log.scrollTop = log.scrollHeight;
+      }
+      controls();
+    }
+
+    async function poll() {
+      if (polling || pending) return;
+      polling = true;
+      const version = actionVersion;
+      try {
+        const state = await request('/api/state');
+        if (version === actionVersion) render(state);
+      } catch (error) {
+        showError(error.message);
+      } finally {
+        polling = false;
+      }
+    }
+
+    async function command(action, data = {}) {
+      pending = true;
+      actionVersion += 1;
+      controls();
+      showError('');
+      try {
+        render(await request(`/api/${action}`, data));
+      } catch (error) {
+        showError(error.message);
+      } finally {
+        pending = false;
+        controls();
+      }
+    }
+
+    element('refresh').addEventListener('click', refreshDevices);
+    deviceTrigger.addEventListener('click', event => {
+      if (running || pending) event.preventDefault();
+    });
+    devicePicker.addEventListener('toggle', () => {
+      if (devicePicker.open) scrollToSelectedDevice();
+    });
+    devicePicker.addEventListener('keydown', event => {
+      if (event.key === 'Escape' && devicePicker.open) {
+        event.preventDefault();
+        closeDevicePicker(true);
+      }
+    });
+    document.addEventListener('click', event => {
+      if (devicePicker.open && !devicePicker.contains(event.target)) closeDevicePicker(false);
+    });
+    element('start').addEventListener('click', () => command('start', {index: selectedIndex}));
+    element('stop').addEventListener('click', () => command('stop'));
+    renderDevices();
+    refreshDevices();
+    poll();
+    setInterval(poll, 750);
+    setInterval(() => {
+      if (!document.hidden) refreshDevices();
+    }, 4000);
+  </script>
+</body>
+</html>

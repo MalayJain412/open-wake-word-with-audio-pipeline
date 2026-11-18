@@ -3,24 +3,20 @@ import time
 import queue
 import tempfile
 import os
+import signal
 
 import numpy as np
-import sounddevice as sd
 import requests
 
-from scipy.signal import resample_poly
 from scipy.io.wavfile import write
 from openwakeword.model import Model
+from audio.audio_processor import to_mono, wake_word_audio
+from audio.device_manager import microphone_from_cli
 
 
 # --------------------------------------------------
 # CONFIGURATION
 # --------------------------------------------------
-
-DEVICE = 11
-SAMPLE_RATE = 48000
-CHANNELS = 1
-CHUNK_SIZE = 3840          # 80 ms at 48 kHz
 
 WAKEWORD = "alexa"         # Change to "hey_jarvis" if needed
 WAKE_THRESHOLD = 0.5
@@ -34,20 +30,6 @@ OLLAMA_URL = "http://localhost:11434/v1/audio/transcriptions"
 OLLAMA_MODEL = "lfm3-omni:2b"
 
 audio_queue = queue.Queue(maxsize=200)
-
-
-# --------------------------------------------------
-# LOAD WAKE WORD MODEL
-# --------------------------------------------------
-
-print("Loading openWakeWord model...")
-
-wake_model = Model(
-    wakeword_models=[WAKEWORD],
-    inference_framework="onnx"
-)
-
-print("Wake-word model loaded.")
 
 
 # --------------------------------------------------
@@ -71,7 +53,7 @@ def audio_callback(indata, frames, time_info, status):
 
 def get_audio_chunk():
 
-    return audio_queue.get()
+    return to_mono(audio_queue.get())
 
 
 def get_rms(audio):
@@ -152,7 +134,7 @@ def record_command():
 # SEND AUDIO TO OLLAMA
 # --------------------------------------------------
 
-def transcribe_audio(audio_data):
+def transcribe_audio(audio_data, sample_rate):
 
     print("\n[OLLAMA] Sending audio for transcription...")
 
@@ -176,7 +158,7 @@ def transcribe_audio(audio_data):
 
         write(
             temp_path,
-            SAMPLE_RATE,
+            sample_rate,
             audio_data
         )
 
@@ -229,6 +211,13 @@ def transcribe_audio(audio_data):
 # --------------------------------------------------
 
 def main():
+    microphone = microphone_from_cli("Sentry voice transcription.")
+    if microphone is None:
+        return
+
+    print("Loading openWakeWord model...")
+    wake_model = Model(wakeword_models=[WAKEWORD], inference_framework="onnx")
+    print("Wake-word model loaded.")
 
     last_detection = 0
 
@@ -239,31 +228,13 @@ def main():
 
     try:
 
-        with sd.InputStream(
-            device=DEVICE,
-            samplerate=SAMPLE_RATE,
-            channels=CHANNELS,
-            dtype="int16",
-            blocksize=CHUNK_SIZE,
-            callback=audio_callback
-        ):
+        with microphone.open(audio_callback):
 
             while True:
 
                 audio = get_audio_chunk()
 
-                # Resample 48 kHz to 16 kHz for openWakeWord
-                audio_16k = resample_poly(
-                    audio.reshape(-1),
-                    1,
-                    3
-                )
-
-                audio_16k = np.clip(
-                    audio_16k,
-                    -32768,
-                    32767
-                ).astype(np.int16)
+                audio_16k = wake_word_audio(audio, microphone.sample_rate)
 
                 predictions = wake_model.predict(audio_16k)
 
@@ -293,7 +264,7 @@ def main():
 
                     if audio_data is not None:
 
-                        transcribe_audio(audio_data)
+                        transcribe_audio(audio_data, microphone.sample_rate)
 
                     # Remove any queued audio captured while
                     # transcription was being processed
@@ -314,4 +285,6 @@ def main():
 
 
 if __name__ == "__main__":
+    if hasattr(signal, "SIGBREAK"):
+        signal.signal(signal.SIGBREAK, signal.default_int_handler)
     main()

@@ -27,11 +27,22 @@ python -m venv .venv
 
 ## 3. Select your microphone
 
+On the first interactive run, Sentry asks how to pick a microphone.
+
+1. **Automatic** opens and tests the available inputs. Stay quiet, then speak when prompted so Sentry can compare speech against background noise. If there’s no clear result, it uses the system default when available or offers manual selection.
+2. **Manual** lists active inputs that Windows classifies as microphones, headsets, or handsets, with their default sample rates and maximum channel counts. Choose a numbered input and Sentry will check that it can capture audio. [Windows endpoint classifications](https://learn.microsoft.com/en-us/windows/win32/api/mmdeviceapi/ne-mmdeviceapi-endpointformfactor)
+3. **System default** uses the current laptop’s default input, which you can change in Windows Sound settings.
+
+Both scripts share the `config.json` saved beside the scripts on the pendrive. Sentry looks up the saved device by name and host API every time it starts. It falls back to automatic selection if that device is missing or unusable. Sentry negotiates the capture format and converts input to 16 kHz mono for wake-word detection.
+
+Run these commands to list inputs or change your saved choice without starting the listener.
+
 ```powershell
-.\.venv\Scripts\python.exe -m sounddevice
+.\.venv\Scripts\python.exe -m audio.device_manager --list-microphones
+.\.venv\Scripts\python.exe -m audio.device_manager --configure-microphone
 ```
 
-Find your microphone’s input device index and replace `DEVICE = 11` in `script.py` with that number. The script expects a microphone that supports mono input at 48 kHz. If you use `openwakeword-script.py`, set its `DEVICE` value too.
+Each laptop needs a working Python installation and the dependencies from step 2. Run that setup on the new laptop if the virtual environment from the previous laptop cannot start. Ollama and its model also need to be available on the laptop running Sentry.
 
 ## 4. Run Sentry
 
@@ -47,8 +58,18 @@ To test wake-word detection on its own, run the script below and say “Hey Jarv
 .\.venv\Scripts\python.exe openwakeword-script.py
 ```
 
+## Browser test console
+
+With Ollama running, start the local test console from the project folder.
+
+```powershell
+.\.venv\Scripts\python.exe sentry_frontend.py
+```
+
+Open [the Sentry test console](http://127.0.0.1:8765). It starts with **Windows default microphone** selected. Choose another input or your saved Sentry preference if needed. Click **Start listening**, then say the displayed wake word. The console shows the latest transcript and recent listener output. A microphone chosen in the browser applies to the current run. While idle, the console checks for input changes every four seconds. Use **Refresh inputs** to check immediately. A Bluetooth headset appears once Windows exposes its microphone under **Sound > Input**. Click **Stop** to release the microphone, or press `Ctrl+C` in PowerShell to shut down the console.
+
 ## Troubleshooting
 
-- If the microphone fails to open, check the `DEVICE` index and confirm that Windows allows desktop apps to access the microphone.
+- If the microphone fails to open, confirm that Windows allows desktop apps to access the microphone, then run `--configure-microphone` to try another input.
 - If Ollama refuses the connection, check that it is running on `localhost:11434` and that `ollama list` shows `lfm3-omni:2b`.
 - If `/v1/audio/transcriptions` returns a 404 even though the model is installed, update Ollama and restart it. [Ollama transcription endpoint](https://docs.ollama.com/api/openai-compatibility#v1audiotranscriptions)
