@@ -1,0 +1,12 @@
+# Shared Python dependencies for both the Ollama and llama.cpp pipelines.
+# Recommended Python version: 3.11 or 3.12 (64-bit).
+#
+# Install from this folder with:
+#   python -m pip install -r requirements.txt
+
+numpy>=1.26,<3
+scipy>=1.11,<2
+sounddevice>=0.4.6,<1
+requests>=2.31,<3
+openwakeword>=0.6,<1
+onnxruntime>=1.17,<2
